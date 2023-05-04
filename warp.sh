@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 #
 # https://github.com/P3TERX/warp.sh
-# Description: Cloudflare WARP configuration script
-# System Required: Debian, Ubuntu, CentOS
-# Version: beta19
+# Description: Cloudflare WARP Installer
+# System Required: Debian, Ubuntu, Fedora, CentOS, Oracle Linux, Arch Linux
+# Version: beta39
 #
 # MIT License
 #
-# Copyright (c) 2021 P3TERX <https://p3terx.com>
+# Copyright (c) 2021-2022 P3TERX <https://p3terx.com>
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -28,7 +28,7 @@
 # SOFTWARE.
 #
 
-shVersion='beta19'
+shVersion='beta39'
 
 FontColor_Red="\033[31m"
 FontColor_Red_Bold="\033[1;31m"
@@ -76,50 +76,66 @@ if [[ -z $(command -v curl) ]]; then
     exit 1
 fi
 
-WireGuard_table='51888'
-WireGuard_fwmark='51888'
-WireGuard_Interface='wgcf'
-WireGuardConfPath="/etc/wireguard/${WireGuard_Interface}.conf"
 WGCF_Profile='wgcf-profile.conf'
-WGCF_SavePath="${HOME}/.wgcf"
-WGCF_Profile_Path="${WGCF_SavePath}/${WGCF_Profile}"
-WGCF_DNS_IPv4='8.8.8.8,8.8.4.4'
-WGCF_DNS_IPv6='2001:4860:4860::8888,2001:4860:4860::8844'
-WGCF_DNS_46="${WGCF_DNS_IPv4},${WGCF_DNS_IPv6}"
-WGCF_DNS_64="${WGCF_DNS_IPv6},${WGCF_DNS_IPv4}"
-WGCF_Endpoint_IP4='162.159.192.1'
-WGCF_Endpoint_IP6='2606:4700:d0::a29f:c001'
-WGCF_Endpoint_IPv4="${WGCF_Endpoint_IP4}:2408"
-WGCF_Endpoint_IPv6="[${WGCF_Endpoint_IP6}]:2408"
-WGCF_Endpoint_Domain='engage.cloudflareclient.com:2408'
-WGCF_AllowedIPs_IPv4='0.0.0.0/0'
-WGCF_AllowedIPs_IPv6='::/0'
-WGCF_AllowedIPs_DualStack='0.0.0.0/0,::/0'
-TestIPv4_1='8.8.8.8'
+WGCF_ProfileDir="/etc/warp"
+WGCF_ProfilePath="${WGCF_ProfileDir}/${WGCF_Profile}"
+
+WireGuard_Interface='wgcf'
+WireGuard_ConfPath="/etc/wireguard/${WireGuard_Interface}.conf"
+
+WireGuard_Interface_DNS_IPv4='8.8.8.8,8.8.4.4'
+WireGuard_Interface_DNS_IPv6='2001:4860:4860::8888,2001:4860:4860::8844'
+WireGuard_Interface_DNS_46="${WireGuard_Interface_DNS_IPv4},${WireGuard_Interface_DNS_IPv6}"
+WireGuard_Interface_DNS_64="${WireGuard_Interface_DNS_IPv6},${WireGuard_Interface_DNS_IPv4}"
+WireGuard_Interface_Rule_table='51888'
+WireGuard_Interface_Rule_fwmark='51888'
+WireGuard_Interface_MTU='1280'
+
+WireGuard_Peer_Endpoint_IP4='162.159.192.1'
+WireGuard_Peer_Endpoint_IP6='2606:4700:d0::a29f:c001'
+WireGuard_Peer_Endpoint_IPv4="${WireGuard_Peer_Endpoint_IP4}:2408"
+WireGuard_Peer_Endpoint_IPv6="[${WireGuard_Peer_Endpoint_IP6}]:2408"
+WireGuard_Peer_Endpoint_Domain='engage.cloudflareclient.com:2408'
+WireGuard_Peer_AllowedIPs_IPv4='0.0.0.0/0'
+WireGuard_Peer_AllowedIPs_IPv6='::/0'
+WireGuard_Peer_AllowedIPs_DualStack='0.0.0.0/0,::/0'
+
+TestIPv4_1='1.0.0.1'
 TestIPv4_2='9.9.9.9'
-TestIPv6_1='2001:4860:4860::8888'
+TestIPv6_1='2606:4700:4700::1001'
 TestIPv6_2='2620:fe::fe'
 CF_Trace_URL='https://www.cloudflare.com/cdn-cgi/trace'
 
 Get_System_Info() {
     source /etc/os-release
-    VERSION_MAJOR="$(echo ${VERSION_ID} | cut -d. -f1)"
-    VIRT="$(systemd-detect-virt)"
-    KERNEL="$(uname -r)"
-    KernelVer_major="$(uname -r | awk -F . '{print $1}')"
-    KernelVer_minor="$(uname -r | awk -F . '{print $2}')"
-    ARCH="$(uname -m)"
+    SysInfo_OS_CodeName="${VERSION_CODENAME}"
+    SysInfo_OS_Name_lowercase="${ID}"
+    SysInfo_OS_Name_Full="${PRETTY_NAME}"
+    SysInfo_RelatedOS="${ID_LIKE}"
+    SysInfo_Kernel="$(uname -r)"
+    SysInfo_Kernel_Ver_major="$(uname -r | awk -F . '{print $1}')"
+    SysInfo_Kernel_Ver_minor="$(uname -r | awk -F . '{print $2}')"
+    SysInfo_Arch="$(uname -m)"
+    SysInfo_Virt="$(systemd-detect-virt)"
+    case ${SysInfo_RelatedOS} in
+    *fedora* | *rhel*)
+        SysInfo_OS_Ver_major="$(rpm -E '%{rhel}')"
+        ;;
+    *)
+        SysInfo_OS_Ver_major="$(echo ${VERSION_ID} | cut -d. -f1)"
+        ;;
+    esac
 }
 
 Print_System_Info() {
     echo -e "
 System Information
-----------------------------------------------------
- Operating System: ${PRETTY_NAME}
-     Linux Kernel: ${KERNEL}
-     Architecture: ${ARCH}
-   Virtualization: ${VIRT}
-----------------------------------------------------
+---------------------------------------------------
+  Operating System: ${SysInfo_OS_Name_Full}
+      Linux Kernel: ${SysInfo_Kernel}
+      Architecture: ${SysInfo_Arch}
+    Virtualization: ${SysInfo_Virt}
+---------------------------------------------------
 "
 }
 
@@ -134,24 +150,34 @@ Install_Requirements_Debian() {
     fi
 }
 
-Instal_WARP_Client_Debian() {
-    Install_Requirements_Debian
-    curl https://pkg.cloudflareclient.com/pubkey.gpg | apt-key add -
-    if [[ ${ID} = ubuntu ]]; then
-        OS_CodeName='focal'
-    elif [[ ${ID_LIKE} = *debian* ]]; then
-        OS_CodeName='buster'
-    else
-        OS_CodeName="${VERSION_CODENAME}"
+Install_WARP_Client_Debian() {
+    if [[ ${SysInfo_OS_Name_lowercase} = ubuntu ]]; then
+        case ${SysInfo_OS_CodeName} in
+        bionic | focal | jammy) ;;
+        *)
+            log ERROR "This operating system is not supported."
+            exit 1
+            ;;
+        esac
+    elif [[ ${SysInfo_OS_Name_lowercase} = debian ]]; then
+        case ${SysInfo_OS_CodeName} in
+        buster | bullseye) ;;
+        *)
+            log ERROR "This operating system is not supported."
+            exit 1
+            ;;
+        esac
     fi
-    echo "deb http://pkg.cloudflareclient.com/ ${OS_CodeName} main" | tee /etc/apt/sources.list.d/cloudflare-client.list
+    Install_Requirements_Debian
+    curl https://pkg.cloudflareclient.com/pubkey.gpg | gpg --yes --dearmor --output /usr/share/keyrings/cloudflare-warp-archive-keyring.gpg
+    echo "deb [arch=amd64 signed-by=/usr/share/keyrings/cloudflare-warp-archive-keyring.gpg] https://pkg.cloudflareclient.com/ ${SysInfo_OS_CodeName} main" | tee /etc/apt/sources.list.d/cloudflare-client.list
     apt update
     apt install cloudflare-warp -y
 }
 
-Instal_WARP_Client_CentOS() {
-    if [[ ${VERSION_MAJOR} = 8 ]]; then
-        rpm -ivh http://pkg.cloudflareclient.com/cloudflare-release-el${VERSION_MAJOR}.rpm
+Install_WARP_Client_CentOS() {
+    if [[ ${SysInfo_OS_Ver_major} = 8 ]]; then
+        rpm -ivh http://pkg.cloudflareclient.com/cloudflare-release-el8.rpm
         yum install cloudflare-warp -y
     else
         log ERROR "This operating system is not supported."
@@ -164,25 +190,23 @@ Check_WARP_Client() {
     WARP_Client_SelfStart=$(systemctl is-enabled warp-svc 2>/dev/null)
 }
 
-Instal_WARP_Client() {
+Install_WARP_Client() {
     Print_System_Info
     log INFO "Installing Cloudflare WARP Client..."
-    if [[ ${ARCH} != x86_64 ]]; then
-        log ERROR "This CPU architecture is not supported: ${ARCH}"
+    if [[ ${SysInfo_Arch} != x86_64 ]]; then
+        log ERROR "This CPU architecture is not supported: ${SysInfo_Arch}"
         exit 1
     fi
-    case ${ID} in
+    case ${SysInfo_OS_Name_lowercase} in
     *debian* | *ubuntu*)
-        Instal_WARP_Client_Debian
+        Install_WARP_Client_Debian
         ;;
     *centos* | *rhel*)
-        Instal_WARP_Client_CentOS
+        Install_WARP_Client_CentOS
         ;;
     *)
-        if [[ ${ID_LIKE} = *debian* ]]; then
-            Instal_WARP_Client_Debian
-        elif [[ ${ID_LIKE} = *rhel* ]]; then
-            Instal_WARP_Client_CentOS
+        if [[ ${SysInfo_RelatedOS} = *rhel* || ${SysInfo_RelatedOS} = *fedora* ]]; then
+            Install_WARP_Client_CentOS
         else
             log ERROR "This operating system is not supported."
             exit 1
@@ -201,15 +225,16 @@ Instal_WARP_Client() {
 
 Uninstall_WARP_Client() {
     log INFO "Uninstalling Cloudflare WARP Client..."
-    case ${ID} in
+    case ${SysInfo_OS_Name_lowercase} in
     *debian* | *ubuntu*)
         apt purge cloudflare-warp -y
+        rm -f /etc/apt/sources.list.d/cloudflare-client.list /usr/share/keyrings/cloudflare-warp-archive-keyring.gpg
         ;;
     *centos* | *rhel*)
         yum remove cloudflare-warp -y
         ;;
     *)
-        if [[ ${ID_LIKE} = *rhel* ]]; then
+        if [[ ${SysInfo_RelatedOS} = *rhel* || ${SysInfo_RelatedOS} = *fedora* ]]; then
             yum remove cloudflare-warp -y
         else
             log ERROR "This operating system is not supported."
@@ -235,32 +260,31 @@ Restart_WARP_Client() {
 Init_WARP_Client() {
     Check_WARP_Client
     if [[ ${WARP_Client_SelfStart} != enabled || ${WARP_Client_Status} != active ]]; then
-        Instal_WARP_Client
+        Install_WARP_Client
     fi
-    yes | warp-cli
-    if [[ $(warp-cli account) = *Missing* ]]; then
+    if [[ $(warp-cli --accept-tos account) = *Missing* ]]; then
         log INFO "Cloudflare WARP Account Registration in progress..."
-        warp-cli register
+        warp-cli --accept-tos register
     fi
 }
 
 Connect_WARP() {
     log INFO "Connecting to WARP..."
-    warp-cli connect
+    warp-cli --accept-tos connect
     log INFO "Enable WARP Always-On..."
-    warp-cli enable-always-on
+    warp-cli --accept-tos enable-always-on
 }
 
 Disconnect_WARP() {
     log INFO "Disable WARP Always-On..."
-    warp-cli disable-always-on
+    warp-cli --accept-tos disable-always-on
     log INFO "Disconnect from WARP..."
-    warp-cli disconnect
+    warp-cli --accept-tos disconnect
 }
 
 Set_WARP_Mode_Proxy() {
     log INFO "Setting up WARP Proxy Mode..."
-    warp-cli set-mode proxy
+    warp-cli --accept-tos set-mode proxy
 }
 
 Enable_WARP_Client_Proxy() {
@@ -302,26 +326,27 @@ Generate_WGCF_Profile() {
         log INFO "WARP WireGuard profile (wgcf-profile.conf) generation in progress..."
         wgcf generate
     done
+    Uninstall_wgcf
 }
 
 Backup_WGCF_Profile() {
-    mkdir -p ${WGCF_SavePath}
-    mv -f wgcf* ${WGCF_SavePath}
+    mkdir -p ${WGCF_ProfileDir}
+    mv -f wgcf* ${WGCF_ProfileDir}
 }
 
 Read_WGCF_Profile() {
-    WGCF_PrivateKey=$(cat ${WGCF_Profile_Path} | grep ^PrivateKey | cut -d= -f2- | awk '$1=$1')
-    WGCF_Address=$(cat ${WGCF_Profile_Path} | grep ^Address | cut -d= -f2- | awk '$1=$1' | sed ":a;N;s/\n/,/g;ta")
-    WGCF_PublicKey=$(cat ${WGCF_Profile_Path} | grep ^PublicKey | cut -d= -f2- | awk '$1=$1')
-    WGCF_Address_IPv4=$(echo ${WGCF_Address} | cut -d, -f1 | cut -d'/' -f1)
-    WGCF_Address_IPv6=$(echo ${WGCF_Address} | cut -d, -f2 | cut -d'/' -f1)
+    WireGuard_Interface_PrivateKey=$(cat ${WGCF_ProfilePath} | grep ^PrivateKey | cut -d= -f2- | awk '$1=$1')
+    WireGuard_Interface_Address=$(cat ${WGCF_ProfilePath} | grep ^Address | cut -d= -f2- | awk '$1=$1' | sed ":a;N;s/\n/,/g;ta")
+    WireGuard_Peer_PublicKey=$(cat ${WGCF_ProfilePath} | grep ^PublicKey | cut -d= -f2- | awk '$1=$1')
+    WireGuard_Interface_Address_IPv4=$(echo ${WireGuard_Interface_Address} | cut -d, -f1 | cut -d'/' -f1)
+    WireGuard_Interface_Address_IPv6=$(echo ${WireGuard_Interface_Address} | cut -d, -f2 | cut -d'/' -f1)
 }
 
 Load_WGCF_Profile() {
     if [[ -f ${WGCF_Profile} ]]; then
         Backup_WGCF_Profile
         Read_WGCF_Profile
-    elif [[ -f ${WGCF_Profile_Path} ]]; then
+    elif [[ -f ${WGCF_ProfilePath} ]]; then
         Read_WGCF_Profile
     else
         Generate_WGCF_Profile
@@ -331,20 +356,14 @@ Load_WGCF_Profile() {
 }
 
 Install_WireGuardTools_Debian() {
-    case ${VERSION_MAJOR} in
+    case ${SysInfo_OS_Ver_major} in
     10)
         if [[ -z $(grep "^deb.*buster-backports.*main" /etc/apt/sources.list{,.d/*}) ]]; then
             echo "deb http://deb.debian.org/debian buster-backports main" | tee /etc/apt/sources.list.d/backports.list
         fi
         ;;
-    9)
-        if [[ -z $(grep "^deb.*unstable.*main" /etc/apt/sources.list{,.d/*}) ]]; then
-            echo "deb http://deb.debian.org/debian/ unstable main" | tee /etc/apt/sources.list.d/unstable.list
-            echo -e "Package: *\nPin: release a=unstable\nPin-Priority: 150\n" | tee /etc/apt/preferences.d/limit-unstable
-        fi
-        ;;
     *)
-        if [[ ${VERSION_MAJOR} -lt 9 ]]; then
+        if [[ ${SysInfo_OS_Ver_major} -lt 10 ]]; then
             log ERROR "This operating system is not supported."
             exit 1
         fi
@@ -362,13 +381,12 @@ Install_WireGuardTools_Ubuntu() {
 }
 
 Install_WireGuardTools_CentOS() {
-    yum install epel-release -y
-    yum install iproute wireguard-tools -y
+    yum install epel-release -y || yum install https://dl.fedoraproject.org/pub/epel/epel-release-latest-${SysInfo_OS_Ver_major}.noarch.rpm -y
+    yum install iproute iptables wireguard-tools -y
 }
 
 Install_WireGuardTools_Fedora() {
-    dnf install iproute openresolv wireguard-tools -y
-    chmod +x /usr/sbin/resolvconf.openresolv
+    dnf install iproute iptables wireguard-tools -y
 }
 
 Install_WireGuardTools_Arch() {
@@ -377,7 +395,7 @@ Install_WireGuardTools_Arch() {
 
 Install_WireGuardTools() {
     log INFO "Installing wireguard-tools..."
-    case ${ID} in
+    case ${SysInfo_OS_Name_lowercase} in
     *debian*)
         Install_WireGuardTools_Debian
         ;;
@@ -394,7 +412,7 @@ Install_WireGuardTools() {
         Install_WireGuardTools_Arch
         ;;
     *)
-        if [[ ${ID_LIKE} = *rhel* ]]; then
+        if [[ ${SysInfo_RelatedOS} = *rhel* || ${SysInfo_RelatedOS} = *fedora* ]]; then
             Install_WireGuardTools_CentOS
         else
             log ERROR "This operating system is not supported."
@@ -405,12 +423,12 @@ Install_WireGuardTools() {
 }
 
 Install_WireGuardGo() {
-    case ${VIRT} in
+    case ${SysInfo_Virt} in
     openvz | lxc*)
         curl -fsSL git.io/wireguard-go.sh | bash
         ;;
     *)
-        if [[ ${KernelVer_major} -lt 5 || ${KernelVer_minor} -lt 6 ]]; then
+        if [[ ${SysInfo_Kernel_Ver_major} -lt 5 || ${SysInfo_Kernel_Ver_minor} -lt 6 ]]; then
             curl -fsSL git.io/wireguard-go.sh | bash
         fi
         ;;
@@ -428,6 +446,8 @@ Install_WireGuard() {
     if [[ ${WireGuard_SelfStart} != enabled || ${WireGuard_Status} != active ]]; then
         Install_WireGuardTools
         Install_WireGuardGo
+    else
+        log INFO "WireGuard is installed and running."
     fi
 }
 
@@ -525,7 +545,7 @@ Disable_WireGuard() {
         fi
         Check_WireGuard
         if [[ ${WireGuard_SelfStart} != enabled && ${WireGuard_Status} != active ]]; then
-            log INFO "Wireguard has been disabled."
+            log INFO "WireGuard has been disabled."
         else
             log ERROR "WireGuard disable failure!"
         fi
@@ -577,127 +597,98 @@ Check_IPv6_addr() {
 Get_IP_addr() {
     Check_Network_Status
     if [[ ${IPv4Status} = on ]]; then
-        log INFO "Checking IPv4 Address..."
+        log INFO "Getting the network interface IPv4 address..."
         Check_IPv4_addr
         if [[ ${IPv4_addr} ]]; then
-            log INFO "IPv4 Address: ${FontColor_Purple}${IPv4_addr}${FontColor_Suffix}"
+            log INFO "IPv4 Address: ${IPv4_addr}"
         else
-            log WARN "IPv4 Address not obtained."
+            log WARN "Network interface IPv4 address not obtained."
         fi
     fi
     if [[ ${IPv6Status} = on ]]; then
-        log INFO "Checking IPv6 Address..."
+        log INFO "Getting the network interface IPv6 address..."
         Check_IPv6_addr
         if [[ ${IPv6_addr} ]]; then
-            log INFO "IPv6 Address: ${FontColor_Purple}${IPv6_addr}${FontColor_Suffix}"
+            log INFO "IPv6 Address: ${IPv6_addr}"
         else
-            log WARN "IPv6 Address not obtained."
+            log WARN "Network interface IPv6 address not obtained."
         fi
     fi
 }
 
-Get_IPv4_addr() {
-    log INFO "正在检测 IPv4 地址..."
-    Check_IPv4_addr
-    if [[ -z ${IPv4_addr} ]]; then
-        log ERROR "IPv4 地址自动检测失败！"
-        Input_IPv4_addr
+Get_WireGuard_Interface_MTU() {
+    log INFO "Getting the best MTU value for WireGuard..."
+    MTU_Preset=1500
+    MTU_Increment=10
+    if [[ ${IPv4Status} = off && ${IPv6Status} = on ]]; then
+        CMD_ping='ping6'
+        MTU_TestIP_1="${TestIPv6_1}"
+        MTU_TestIP_2="${TestIPv6_2}"
     else
-        log INFO "检测到 IPv4 地址：${FontColor_Purple}${IPv4_addr}${FontColor_Suffix}"
-        unset answer_YN
-        read -p "是否需要修改？[y/N] " answer_YN
-        case ${answer_YN:-n} in
-        Y | y)
-            Input_IPv4_addr
-            ;;
-        N | n)
-            echo
-            ;;
-        *)
-            log ERROR "无效输入！"
-            Get_IPv4_addr
-            ;;
-        esac
+        CMD_ping='ping'
+        MTU_TestIP_1="${TestIPv4_1}"
+        MTU_TestIP_2="${TestIPv4_2}"
     fi
-}
-
-Get_IPv6_addr() {
-    log INFO "正在检测 IPv6 地址..."
-    Check_IPv6_addr
-    if [[ -z ${IPv6_addr} ]]; then
-        log ERROR "IPv6 地址自动检测失败！"
-        Input_IPv6_addr
-    else
-        log INFO "检测到 IPv6 地址：${FontColor_Purple}${IPv6_addr}${FontColor_Suffix}"
-        unset answer_YN
-        read -p "是否需要修改？[y/N] " answer_YN
-        case ${answer_YN:-n} in
-        Y | y)
-            Input_IPv6_addr
-            ;;
-        N | n)
-            echo
-            ;;
-        *)
-            log ERROR "无效输入！"
-            Get_IPv6_addr
-            ;;
-        esac
-    fi
-}
-
-Input_IPv4_addr() {
-    read -p "请输入 IPv4 地址：" IPv4_addr
-    if [[ -z ${IPv4_addr} ]]; then
-        log ERROR "无效输入！"
-        Get_IPv4_addr
-    fi
-}
-
-Input_IPv6_addr() {
-    read -p "请输入 IPv6 地址：" IPv6_addr
-    if [[ -z ${IPv6_addr} ]]; then
-        log ERROR "无效输入！"
-        Get_IPv6_addr
-    fi
+    while true; do
+        if ${CMD_ping} -c1 -W1 -s$((${MTU_Preset} - 28)) -Mdo ${MTU_TestIP_1} >/dev/null 2>&1 || ${CMD_ping} -c1 -W1 -s$((${MTU_Preset} - 28)) -Mdo ${MTU_TestIP_2} >/dev/null 2>&1; then
+            MTU_Increment=1
+            MTU_Preset=$((${MTU_Preset} + ${MTU_Increment}))
+        else
+            MTU_Preset=$((${MTU_Preset} - ${MTU_Increment}))
+            if [[ ${MTU_Increment} = 1 ]]; then
+                break
+            fi
+        fi
+        if [[ ${MTU_Preset} -le 1360 ]]; then
+            log WARN "MTU is set to the lowest value."
+            MTU_Preset='1360'
+            break
+        fi
+    done
+    WireGuard_Interface_MTU=$((${MTU_Preset} - 80))
+    log INFO "WireGuard MTU: ${WireGuard_Interface_MTU}"
 }
 
 Generate_WireGuardProfile_Interface() {
-    log INFO "WireGuard profile (${WireGuardConfPath}) generation in progress..."
-    cat <<EOF >${WireGuardConfPath}
+    Get_WireGuard_Interface_MTU
+    log INFO "WireGuard profile (${WireGuard_ConfPath}) generation in progress..."
+    cat <<EOF >${WireGuard_ConfPath}
+# Generated by P3TERX/warp.sh
+# Visit https://github.com/P3TERX/warp.sh for more information
+
 [Interface]
-PrivateKey = ${WGCF_PrivateKey}
-Address = ${WGCF_Address}
-DNS = ${WGCF_DNS}
-MTU = 1280
+PrivateKey = ${WireGuard_Interface_PrivateKey}
+Address = ${WireGuard_Interface_Address}
+DNS = ${WireGuard_Interface_DNS}
+MTU = ${WireGuard_Interface_MTU}
 EOF
 }
 
 Generate_WireGuardProfile_Interface_Rule_TableOff() {
-    cat <<EOF >>${WireGuardConfPath}
+    cat <<EOF >>${WireGuard_ConfPath}
 Table = off
 EOF
 }
 
 Generate_WireGuardProfile_Interface_Rule_IPv4_nonGlobal() {
-    cat <<EOF >>${WireGuardConfPath}
-PostUP = ip -4 route add default dev ${WireGuard_Interface} table ${WireGuard_table}
-PostUP = ip -4 rule add from ${WGCF_Address_IPv4} lookup ${WireGuard_table}
-PostDown = ip -4 rule delete from ${WGCF_Address_IPv4} lookup ${WireGuard_table}
-PostUP = ip -4 rule add fwmark ${WireGuard_fwmark} lookup ${WireGuard_table}
-PostDown = ip -4 rule delete fwmark ${WireGuard_fwmark} lookup ${WireGuard_table}
+    cat <<EOF >>${WireGuard_ConfPath}
+PostUP = ip -4 route add default dev ${WireGuard_Interface} table ${WireGuard_Interface_Rule_table}
+PostUP = ip -4 rule add from ${WireGuard_Interface_Address_IPv4} lookup ${WireGuard_Interface_Rule_table}
+PostDown = ip -4 rule delete from ${WireGuard_Interface_Address_IPv4} lookup ${WireGuard_Interface_Rule_table}
+PostUP = ip -4 rule add fwmark ${WireGuard_Interface_Rule_fwmark} lookup ${WireGuard_Interface_Rule_table}
+PostDown = ip -4 rule delete fwmark ${WireGuard_Interface_Rule_fwmark} lookup ${WireGuard_Interface_Rule_table}
 PostUP = ip -4 rule add table main suppress_prefixlength 0
 PostDown = ip -4 rule delete table main suppress_prefixlength 0
 EOF
 }
 
 Generate_WireGuardProfile_Interface_Rule_IPv6_nonGlobal() {
-    cat <<EOF >>${WireGuardConfPath}
-PostUP = ip -6 route add default dev ${WireGuard_Interface} table ${WireGuard_table}
-PostUP = ip -6 rule add from ${WGCF_Address_IPv6} lookup ${WireGuard_table}
-PostDown = ip -6 rule delete from ${WGCF_Address_IPv6} lookup ${WireGuard_table}
-PostUP = ip -6 rule add fwmark ${WireGuard_fwmark} lookup ${WireGuard_table}
-PostDown = ip -6 rule delete fwmark ${WireGuard_fwmark} lookup ${WireGuard_table}
+    cat <<EOF >>${WireGuard_ConfPath}
+PostUP = ip -6 route add default dev ${WireGuard_Interface} table ${WireGuard_Interface_Rule_table}
+PostUP = ip -6 rule add from ${WireGuard_Interface_Address_IPv6} lookup ${WireGuard_Interface_Rule_table}
+PostDown = ip -6 rule delete from ${WireGuard_Interface_Address_IPv6} lookup ${WireGuard_Interface_Rule_table}
+PostUP = ip -6 rule add fwmark ${WireGuard_Interface_Rule_fwmark} lookup ${WireGuard_Interface_Rule_table}
+PostDown = ip -6 rule delete fwmark ${WireGuard_Interface_Rule_fwmark} lookup ${WireGuard_Interface_Rule_table}
 PostUP = ip -6 rule add table main suppress_prefixlength 0
 PostDown = ip -6 rule delete table main suppress_prefixlength 0
 EOF
@@ -710,25 +701,26 @@ Generate_WireGuardProfile_Interface_Rule_DualStack_nonGlobal() {
 }
 
 Generate_WireGuardProfile_Interface_Rule_IPv4_Global_srcIP() {
-    cat <<EOF >>${WireGuardConfPath}
+    cat <<EOF >>${WireGuard_ConfPath}
 PostUp = ip -4 rule add from ${IPv4_addr} lookup main prio 18
 PostDown = ip -4 rule delete from ${IPv4_addr} lookup main prio 18
 EOF
 }
 
 Generate_WireGuardProfile_Interface_Rule_IPv6_Global_srcIP() {
-    cat <<EOF >>${WireGuardConfPath}
+    cat <<EOF >>${WireGuard_ConfPath}
 PostUp = ip -6 rule add from ${IPv6_addr} lookup main prio 18
 PostDown = ip -6 rule delete from ${IPv6_addr} lookup main prio 18
 EOF
 }
 
 Generate_WireGuardProfile_Peer() {
-    cat <<EOF >>${WireGuardConfPath}
+    cat <<EOF >>${WireGuard_ConfPath}
+
 [Peer]
-PublicKey = ${WGCF_PublicKey}
-AllowedIPs = ${WGCF_AllowedIPs}
-Endpoint = ${WGCF_Endpoint}
+PublicKey = ${WireGuard_Peer_PublicKey}
+AllowedIPs = ${WireGuard_Peer_AllowedIPs}
+Endpoint = ${WireGuard_Peer_Endpoint}
 EOF
 }
 
@@ -845,6 +837,11 @@ Check_WARP_WireGuard_Status() {
         fi
         ;;
     esac
+    if [[ ${IPv4Status} = off && ${IPv6Status} = off ]]; then
+        log ERROR "Cloudflare WARP network anomaly, WireGuard tunnel established failed."
+        Disable_WireGuard
+        exit 1
+    fi
 }
 
 Check_ALL_Status() {
@@ -856,6 +853,7 @@ Check_ALL_Status() {
 
 Print_WARP_Client_Status() {
     log INFO "Status check in progress..."
+    sleep 3
     Check_WARP_Client_Status
     Check_WARP_Proxy_Status
     echo -e "
@@ -898,17 +896,17 @@ Print_ALL_Status() {
 
 View_WireGuard_Profile() {
     Print_Delimiter
-    cat ${WireGuardConfPath}
+    cat ${WireGuard_ConfPath}
     Print_Delimiter
 }
 
-Check_WGCF_Endpoint() {
-    if ping -c1 -W1 ${WGCF_Endpoint_IP4} >/dev/null 2>&1; then
-        WGCF_Endpoint="${WGCF_Endpoint_IPv4}"
-    elif ping6 -c1 -W1 ${WGCF_Endpoint_IP6} >/dev/null 2>&1; then
-        WGCF_Endpoint="${WGCF_Endpoint_IPv6}"
+Check_WireGuard_Peer_Endpoint() {
+    if ping -c1 -W1 ${WireGuard_Peer_Endpoint_IP4} >/dev/null 2>&1; then
+        WireGuard_Peer_Endpoint="${WireGuard_Peer_Endpoint_IPv4}"
+    elif ping6 -c1 -W1 ${WireGuard_Peer_Endpoint_IP6} >/dev/null 2>&1; then
+        WireGuard_Peer_Endpoint="${WireGuard_Peer_Endpoint_IPv6}"
     else
-        WGCF_Endpoint="${WGCF_Endpoint_Domain}"
+        WireGuard_Peer_Endpoint="${WireGuard_Peer_Endpoint_Domain}"
     fi
 }
 
@@ -917,12 +915,12 @@ Set_WARP_IPv4() {
     Get_IP_addr
     Load_WGCF_Profile
     if [[ ${IPv4Status} = off && ${IPv6Status} = on ]]; then
-        WGCF_DNS="${WGCF_DNS_64}"
+        WireGuard_Interface_DNS="${WireGuard_Interface_DNS_64}"
     else
-        WGCF_DNS="${WGCF_DNS_46}"
+        WireGuard_Interface_DNS="${WireGuard_Interface_DNS_46}"
     fi
-    WGCF_AllowedIPs="${WGCF_AllowedIPs_IPv4}"
-    Check_WGCF_Endpoint
+    WireGuard_Peer_AllowedIPs="${WireGuard_Peer_AllowedIPs_IPv4}"
+    Check_WireGuard_Peer_Endpoint
     Generate_WireGuardProfile_Interface
     if [[ -n ${IPv4_addr} ]]; then
         Generate_WireGuardProfile_Interface_Rule_IPv4_Global_srcIP
@@ -938,12 +936,12 @@ Set_WARP_IPv6() {
     Get_IP_addr
     Load_WGCF_Profile
     if [[ ${IPv4Status} = off && ${IPv6Status} = on ]]; then
-        WGCF_DNS="${WGCF_DNS_64}"
+        WireGuard_Interface_DNS="${WireGuard_Interface_DNS_64}"
     else
-        WGCF_DNS="${WGCF_DNS_46}"
+        WireGuard_Interface_DNS="${WireGuard_Interface_DNS_46}"
     fi
-    WGCF_AllowedIPs="${WGCF_AllowedIPs_IPv6}"
-    Check_WGCF_Endpoint
+    WireGuard_Peer_AllowedIPs="${WireGuard_Peer_AllowedIPs_IPv6}"
+    Check_WireGuard_Peer_Endpoint
     Generate_WireGuardProfile_Interface
     if [[ -n ${IPv6_addr} ]]; then
         Generate_WireGuardProfile_Interface_Rule_IPv6_Global_srcIP
@@ -958,9 +956,9 @@ Set_WARP_DualStack() {
     Install_WireGuard
     Get_IP_addr
     Load_WGCF_Profile
-    WGCF_DNS="${WGCF_DNS_46}"
-    WGCF_AllowedIPs="${WGCF_AllowedIPs_DualStack}"
-    Check_WGCF_Endpoint
+    WireGuard_Interface_DNS="${WireGuard_Interface_DNS_46}"
+    WireGuard_Peer_AllowedIPs="${WireGuard_Peer_AllowedIPs_DualStack}"
+    Check_WireGuard_Peer_Endpoint
     Generate_WireGuardProfile_Interface
     if [[ -n ${IPv4_addr} ]]; then
         Generate_WireGuardProfile_Interface_Rule_IPv4_Global_srcIP
@@ -978,9 +976,9 @@ Set_WARP_DualStack_nonGlobal() {
     Install_WireGuard
     Get_IP_addr
     Load_WGCF_Profile
-    WGCF_DNS="${WGCF_DNS_46}"
-    WGCF_AllowedIPs="${WGCF_AllowedIPs_DualStack}"
-    Check_WGCF_Endpoint
+    WireGuard_Interface_DNS="${WireGuard_Interface_DNS_46}"
+    WireGuard_Peer_AllowedIPs="${WireGuard_Peer_AllowedIPs_DualStack}"
+    Check_WireGuard_Peer_Endpoint
     Generate_WireGuardProfile_Interface
     Generate_WireGuardProfile_Interface_Rule_DualStack_nonGlobal
     Generate_WireGuardProfile_Peer
@@ -989,101 +987,7 @@ Set_WARP_DualStack_nonGlobal() {
     Print_WARP_WireGuard_Status
 }
 
-Add_WARP_IPv4__Change_WARP_IPv6() {
-    Install_WireGuard
-    Get_IPv6_addr
-    Load_WGCF_Profile
-    WGCF_DNS="${WGCF_DNS_64}"
-    WGCF_AllowedIPs="${WGCF_AllowedIPs_DualStack}"
-    WGCF_Endpoint="${WGCF_Endpoint_IPv6}"
-    Generate_WireGuardProfile_Interface
-    Generate_WireGuardProfile_Interface_Rule_IPv6_Global_srcIP
-    Generate_WireGuardProfile_Peer
-    View_WireGuard_Profile
-    Enable_WireGuard
-    Print_WARP_WireGuard_Status
-}
-
-Add_WARP_IPv6__Change_WARP_IPv4() {
-    Install_WireGuard
-    Get_IPv4_addr
-    Load_WGCF_Profile
-    WGCF_DNS="${WGCF_DNS_46}"
-    WGCF_AllowedIPs="${WGCF_AllowedIPs_DualStack}"
-    WGCF_Endpoint="${WGCF_Endpoint_IPv4}"
-    Generate_WireGuardProfile_Interface
-    Generate_WireGuardProfile_Interface_Rule_IPv4_Global_srcIP
-    Generate_WireGuardProfile_Peer
-    View_WireGuard_Profile
-    Enable_WireGuard
-    Print_WARP_WireGuard_Status
-}
-
-Change_WARP_IPv6() {
-    Install_WireGuard
-    Get_IPv6_addr
-    Load_WGCF_Profile
-    WGCF_DNS="${WGCF_DNS_46}"
-    WGCF_AllowedIPs="${WGCF_AllowedIPs_IPv6}"
-    WGCF_Endpoint="${WGCF_Endpoint_IPv6}"
-    Generate_WireGuardProfile_Interface
-    Generate_WireGuardProfile_Interface_Rule_IPv6_Global_srcIP
-    Generate_WireGuardProfile_Peer
-    View_WireGuard_Profile
-    Enable_WireGuard
-    Print_WARP_WireGuard_Status
-}
-
-Change_WARP_IPv4() {
-    Install_WireGuard
-    Get_IPv4_addr
-    Load_WGCF_Profile
-    WGCF_DNS="${WGCF_DNS_64}"
-    WGCF_AllowedIPs="${WGCF_AllowedIPs_IPv4}"
-    WGCF_Endpoint="${WGCF_Endpoint_IPv4}"
-    Generate_WireGuardProfile_Interface
-    Generate_WireGuardProfile_Interface_Rule_IPv4_Global_srcIP
-    Generate_WireGuardProfile_Peer
-    View_WireGuard_Profile
-    Enable_WireGuard
-    Print_WARP_WireGuard_Status
-}
-
-Change_WARP_DualStack_IPv4Out() {
-    Install_WireGuard
-    Get_IPv4_addr
-    Get_IPv6_addr
-    Load_WGCF_Profile
-    WGCF_DNS="${WGCF_DNS_46}"
-    WGCF_AllowedIPs="${WGCF_AllowedIPs_DualStack}"
-    WGCF_Endpoint="${WGCF_Endpoint_IPv4}"
-    Generate_WireGuardProfile_Interface
-    Generate_WireGuardProfile_Interface_Rule_IPv4_Global_srcIP
-    Generate_WireGuardProfile_Interface_Rule_IPv6_Global_srcIP
-    Generate_WireGuardProfile_Peer
-    View_WireGuard_Profile
-    Enable_WireGuard
-    Print_WARP_WireGuard_Status
-}
-
-Change_WARP_DualStack_IPv6Out() {
-    Install_WireGuard
-    Get_IPv4_addr
-    Get_IPv6_addr
-    Load_WGCF_Profile
-    WGCF_DNS="${WGCF_DNS_46}"
-    WGCF_AllowedIPs="${WGCF_AllowedIPs_DualStack}"
-    WGCF_Endpoint="${WGCF_Endpoint_IPv6}"
-    Generate_WireGuardProfile_Interface
-    Generate_WireGuardProfile_Interface_Rule_IPv4_Global_srcIP
-    Generate_WireGuardProfile_Interface_Rule_IPv6_Global_srcIP
-    Generate_WireGuardProfile_Peer
-    View_WireGuard_Profile
-    Enable_WireGuard
-    Print_WARP_WireGuard_Status
-}
-
-Menu_Title="${FontColor_Yellow_Bold}Cloudflare WARP 一键配置脚本${FontColor_Suffix} ${FontColor_Red}[${shVersion}]${FontColor_Suffix} by ${FontColor_Purple_Bold}P3TERX.COM${FontColor_Suffix}"
+Menu_Title="${FontColor_Yellow_Bold}Cloudflare WARP 一键安装脚本${FontColor_Suffix} ${FontColor_Red}[${shVersion}]${FontColor_Suffix} by ${FontColor_Purple_Bold}P3TERX.COM${FontColor_Suffix}"
 
 Menu_WARP_Client() {
     clear
@@ -1127,53 +1031,6 @@ ${Menu_Title}
         log ERROR "无效输入！"
         sleep 2s
         Menu_WARP_Client
-        ;;
-    esac
-}
-
-Menu_WARP_WireGuard_Other() {
-    clear
-    echo -e "
-${Menu_Title}
-
- ${FontColor_Green_Bold}0${FontColor_Suffix}. 返回主菜单
- -
- ${FontColor_Green_Bold}1${FontColor_Suffix}. 置换 IPv4 为 WARP 网络
- ${FontColor_Green_Bold}2${FontColor_Suffix}. 置换 IPv6 为 WARP 网络
- ${FontColor_Green_Bold}3${FontColor_Suffix}. 置换 IPv4/IPv6 为 WARP 网络 (IPv4 节点)
- ${FontColor_Green_Bold}4${FontColor_Suffix}. 置换 IPv4/IPv6 为 WARP 网络 (IPv6 节点)
- ${FontColor_Green_Bold}5${FontColor_Suffix}. 添加 WARP IPv4 网络，置换 IPv6 为 WARP 网络
- ${FontColor_Green_Bold}6${FontColor_Suffix}. 添加 WARP IPv6 网络，置换 IPv4 为 WARP 网络
-"
-    unset MenuNumber
-    read -p "请输入选项: " MenuNumber
-    echo
-    case ${MenuNumber} in
-    0)
-        Start_Menu
-        ;;
-    1)
-        Change_WARP_IPv4
-        ;;
-    2)
-        Change_WARP_IPv6
-        ;;
-    3)
-        Change_WARP_DualStack_IPv4Out
-        ;;
-    4)
-        Change_WARP_DualStack_IPv6Out
-        ;;
-    5)
-        Add_WARP_IPv4__Change_WARP_IPv6
-        ;;
-    6)
-        Add_WARP_IPv6__Change_WARP_IPv4
-        ;;
-    *)
-        log ERROR "无效输入！"
-        sleep 2s
-        Menu_DualStack
         ;;
     esac
 }
@@ -1237,38 +1094,42 @@ ${Menu_Title}
  IPv6 网络状态  : ${WARP_IPv6_Status_zh}
  -------------------------
 
- ${FontColor_Green_Bold}1${FontColor_Suffix}. 自动配置 WARP 官方客户端 SOCKS5 代理
- ${FontColor_Green_Bold}2${FontColor_Suffix}. 管理 WARP 官方客户端
+ ${FontColor_Green_Bold}1${FontColor_Suffix}. 安装 Cloudflare WARP 官方客户端
+ ${FontColor_Green_Bold}2${FontColor_Suffix}. 自动配置 WARP 客户端 SOCKS5 代理
+ ${FontColor_Green_Bold}3${FontColor_Suffix}. 管理 Cloudflare WARP 官方客户端
  -
- ${FontColor_Green_Bold}3${FontColor_Suffix}. 自动配置 WARP WireGuard IPv4 网络
- ${FontColor_Green_Bold}4${FontColor_Suffix}. 自动配置 WARP WireGuard IPv6 网络
- ${FontColor_Green_Bold}5${FontColor_Suffix}. 自动配置 WARP WireGuard 双栈全局网络
- ${FontColor_Green_Bold}6${FontColor_Suffix}. 选择其它 WARP WireGuard 配置方案
- ${FontColor_Green_Bold}7${FontColor_Suffix}. 管理 WARP WireGuard 网络
+ ${FontColor_Green_Bold}4${FontColor_Suffix}. 安装 WireGuard 相关组件
+ ${FontColor_Green_Bold}5${FontColor_Suffix}. 自动配置 WARP WireGuard IPv4 网络
+ ${FontColor_Green_Bold}6${FontColor_Suffix}. 自动配置 WARP WireGuard IPv6 网络
+ ${FontColor_Green_Bold}7${FontColor_Suffix}. 自动配置 WARP WireGuard 双栈全局网络
+ ${FontColor_Green_Bold}8${FontColor_Suffix}. 管理 WARP WireGuard 网络
 "
     unset MenuNumber
     read -p "请输入选项: " MenuNumber
     echo
     case ${MenuNumber} in
     1)
-        Enable_WARP_Client_Proxy
+        Install_WARP_Client
         ;;
     2)
-        Menu_WARP_Client
+        Enable_WARP_Client_Proxy
         ;;
     3)
-        Set_WARP_IPv4
+        Menu_WARP_Client
         ;;
     4)
-        Set_WARP_IPv6
+        Install_WireGuard
         ;;
     5)
-        Set_WARP_DualStack
+        Set_WARP_IPv4
         ;;
     6)
-        Menu_WARP_WireGuard_Other
+        Set_WARP_IPv6
         ;;
     7)
+        Set_WARP_DualStack
+        ;;
+    8)
         Menu_WARP_WireGuard
         ;;
     *)
@@ -1281,7 +1142,7 @@ ${Menu_Title}
 
 Print_Usage() {
     echo -e "
-Cloudflare WARP configuration script
+Cloudflare WARP Installer [${shVersion}]
 
 USAGE:
     bash <(curl -fsSL git.io/warp.sh) [SUBCOMMAND]
@@ -1292,12 +1153,13 @@ SUBCOMMANDS:
     restart         Restart Cloudflare WARP Official Linux Client
     proxy           Enable WARP Client Proxy Mode (default SOCKS5 port: 40000)
     unproxy         Disable WARP Client Proxy Mode
-    wg              Configuration WARP Non-Global Network (with WireGuard), set fwmark or interface IP Address to use the WARP network
+    wg              Install WireGuard and related components
     wg4             Configuration WARP IPv4 Global Network (with WireGuard), all IPv4 outbound data over the WARP network
     wg6             Configuration WARP IPv6 Global Network (with WireGuard), all IPv6 outbound data over the WARP network
     wgd             Configuration WARP Dual Stack Global Network (with WireGuard), all outbound data over the WARP network
-    rewg            Restart WARP WireGuard service
-    unwg            Disable WARP WireGuard service
+    wgx             Configuration WARP Non-Global Network (with WireGuard), set fwmark or interface IP Address to use the WARP network
+    rwg             Restart WARP WireGuard service
+    dwg             Disable WARP WireGuard service
     status          Prints status information
     version         Prints version information
     help            Prints this message or the help of the given subcommand(s)
@@ -1305,11 +1167,23 @@ SUBCOMMANDS:
 "
 }
 
+cat <<-'EOM'
+
+[0;1;35;95m__[0m        [0;1;34;94m__[0;1;35;95m_[0m    [0;1;33;93m_[0;1;32;92m__[0;1;36;96m_[0m  [0;1;34;94m_[0;1;35;95m__[0;1;31;91m_[0m    [0;1;32;92m_[0;1;36;96m__[0m           [0;1;36;96m_[0m        [0;1;32;92m_[0m [0;1;36;96m_[0m           
+[0;1;31;91m\[0m [0;1;33;93m\[0m      [0;1;34;94m/[0m [0;1;35;95m/[0m [0;1;31;91m\[0m  [0;1;32;92m|[0m  [0;1;36;96m_[0m [0;1;34;94m\[0;1;35;95m|[0m  [0;1;31;91m_[0m [0;1;33;93m\[0m  [0;1;36;96m|_[0m [0;1;34;94m_[0;1;35;95m|_[0m [0;1;31;91m_[0;1;33;93m_[0m  [0;1;32;92m_[0;1;36;96m__[0;1;34;94m|[0m [0;1;35;95m|_[0m [0;1;31;91m_[0;1;33;93m_[0m [0;1;32;92m_|[0m [0;1;36;96m|[0m [0;1;34;94m|[0m [0;1;35;95m_[0;1;31;91m__[0m [0;1;33;93m_[0m [0;1;32;92m_[0;1;36;96m_[0m 
+ [0;1;33;93m\[0m [0;1;32;92m\[0m [0;1;36;96m/[0;1;34;94m\[0m [0;1;35;95m/[0m [0;1;31;91m/[0m [0;1;33;93m_[0m [0;1;32;92m\[0m [0;1;36;96m|[0m [0;1;34;94m|_[0;1;35;95m)[0m [0;1;31;91m|[0m [0;1;33;93m|_[0;1;32;92m)[0m [0;1;36;96m|[0m  [0;1;34;94m|[0m [0;1;35;95m|[0;1;31;91m|[0m [0;1;33;93m'_[0m [0;1;32;92m\[0;1;36;96m/[0m [0;1;34;94m__[0;1;35;95m|[0m [0;1;31;91m__[0;1;33;93m/[0m [0;1;32;92m_`[0m [0;1;36;96m|[0m [0;1;34;94m|[0m [0;1;35;95m|[0;1;31;91m/[0m [0;1;33;93m_[0m [0;1;32;92m\[0m [0;1;36;96m'_[0;1;34;94m_|[0m
+  [0;1;36;96m\[0m [0;1;34;94mV[0m  [0;1;35;95mV[0m [0;1;31;91m/[0m [0;1;33;93m_[0;1;32;92m__[0m [0;1;36;96m\[0;1;34;94m|[0m  [0;1;35;95m_[0m [0;1;31;91m<[0;1;33;93m|[0m  [0;1;32;92m_[0;1;36;96m_/[0m   [0;1;35;95m|[0m [0;1;31;91m|[0;1;33;93m|[0m [0;1;32;92m|[0m [0;1;36;96m|[0m [0;1;34;94m\_[0;1;35;95m_[0m [0;1;31;91m\[0m [0;1;33;93m||[0m [0;1;32;92m([0;1;36;96m_|[0m [0;1;34;94m|[0m [0;1;35;95m|[0m [0;1;31;91m|[0m  [0;1;32;92m__[0;1;36;96m/[0m [0;1;34;94m|[0m   
+   [0;1;34;94m\[0;1;35;95m_/[0;1;31;91m\_[0;1;33;93m/_[0;1;32;92m/[0m   [0;1;34;94m\_[0;1;35;95m\_[0;1;31;91m|[0m [0;1;33;93m\_[0;1;32;92m\_[0;1;36;96m|[0m     [0;1;31;91m|_[0;1;33;93m__[0;1;32;92m|_[0;1;36;96m|[0m [0;1;34;94m|_[0;1;35;95m|_[0;1;31;91m__[0;1;33;93m/\[0;1;32;92m__[0;1;36;96m\_[0;1;34;94m_,[0;1;35;95m_|[0;1;31;91m_|[0;1;33;93m_|[0;1;32;92m\_[0;1;36;96m__[0;1;34;94m|_[0;1;35;95m|[0m   
+                                                                    
+Copyright (C) P3TERX.COM | https://github.com/P3TERX/warp.sh
+
+EOM
+
 if [ $# -ge 1 ]; then
     Get_System_Info
     case ${1} in
     install)
-        Instal_WARP_Client
+        Install_WARP_Client
         ;;
     uninstall)
         Uninstall_WARP_Client
@@ -1324,7 +1198,7 @@ if [ $# -ge 1 ]; then
         Disconnect_WARP
         ;;
     wg)
-        Set_WARP_DualStack_nonGlobal
+        Install_WireGuard
         ;;
     wg4 | 4)
         Set_WARP_IPv4
@@ -1335,10 +1209,13 @@ if [ $# -ge 1 ]; then
     wgd | d)
         Set_WARP_DualStack
         ;;
-    rewg)
+    wgx | x)
+        Set_WARP_DualStack_nonGlobal
+        ;;
+    rwg)
         Restart_WireGuard
         ;;
-    unwg)
+    dwg)
         Disable_WireGuard
         ;;
     status)
